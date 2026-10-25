@@ -1,0 +1,15 @@
+== Herón: referencia en Python vs. salida de la máquina DUOS ==
+  x=125.0      sqrt Herón=11.180339887498949     math.sqrt=11.180339887498949     idéntico
+  x=2.0        sqrt Herón=1.414213562373095      math.sqrt=1.4142135623730951     difiere en -1 ulp
+  x=3.0        sqrt Herón=1.7320508075688772     math.sqrt=1.7320508075688772     idéntico
+  x=0.5        sqrt Herón=0.7071067811865475     math.sqrt=0.7071067811865476     difiere en -1 ulp
+  x=12345.678  sqrt Herón=111.11110655555547     math.sqrt=111.11110655555547     idéntico
+  28 iteraciones comparadas bit a bit: OK
+
+== Brun: referencia en Python vs. salida de la máquina DUOS ==
+  N=10^2 pares=8     B2(N)=1.330990365719087 est=1.904399633290139 = DUOS
+  N=10^3 pares=35    B2(N)=1.518032463559591 est=1.900305308606959 = DUOS
+  N=10^4 pares=205   B2(N)=1.616893557432201 est=1.903598191217727 = DUOS
+  N=10^5 pares=1224  B2(N)=1.672799584827740 est=1.902163291856161 = DUOS
+
+Resultado: Herón OK, Brun OK

@@ -1,0 +1,10 @@
+FADD: 9144/9144 correctos (promedio 348 instrucciones DUOS por operación)
+FSUB: 9144/9144 correctos (promedio 357 instrucciones DUOS por operación)
+FMUL: 9144/9144 correctos (promedio 408 instrucciones DUOS por operación)
+FDIV: 9144/9144 correctos (promedio 503 instrucciones DUOS por operación)
+FCMP: 9144/9144 correctos (promedio 106 instrucciones DUOS por operación)
+FI2F: 6000/6000 correctos (promedio 208 instrucciones DUOS por operación)
+FF2I: 6000/6000 correctos (promedio 93 instrucciones DUOS por operación)
+FPRINT: 1500/1500 correctos (comparado con el formato '%.15f' de Python)
+
+Total de fallos: 0   (56 s, 20,151,584 instrucciones, ningún registro excedió 64 bits)
