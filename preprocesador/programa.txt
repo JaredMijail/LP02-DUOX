@@ -1,0 +1,3 @@
+#include <asd.py>
+#define ID "asd"
+#define SIZE 20

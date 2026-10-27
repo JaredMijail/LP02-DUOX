@@ -1,0 +1,7 @@
+s = "N"
+c = 'N'
+; N en comentario
+// N en comentario
+/* N en
+   comentario */
+v = 5
