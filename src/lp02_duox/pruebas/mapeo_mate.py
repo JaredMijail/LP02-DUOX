@@ -75,7 +75,7 @@ def expandir(llamada: str) -> list:
 def resumen(nativas: list) -> tuple:
     cuenta = Counter(m for m, _ in nativas)
     total = sum(ISA[m][1] * n for m, n in cuenta.items())
-    detalle = ", ".join(f"{m} {ISA[m][0]:02X}/{ISA[m][1]} x{n}"
+    detalle = ", ".join(f"{m} {ISA[m][0]:02X}/{ISA[m][1]} ×{n}"
                         for m, n in sorted(cuenta.items(), key=lambda x: -x[1]))
     return len(nativas), total, cuenta["INT"], detalle
 
@@ -114,7 +114,7 @@ def main():
             print(f"; {n} instrucciones, {total} bytes\n")
         return
 
-    print("| # | Macro | Instr. | Bytes | Llamadas INT | Detalle (mnemonico opcode/bytes xveces) |")
+    print("| # | Macro | Instr. | Bytes | Llamadas INT | Detalle (mnemónico opcode/bytes ×veces) |")
     print("|---|---|---|---|---|---|")
     suma = 0
     for num, nombre, ops in LLAMADAS:

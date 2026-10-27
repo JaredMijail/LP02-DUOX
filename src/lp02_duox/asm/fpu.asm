@@ -91,7 +91,7 @@ p2_1:
     JLTI p2_t, 1, p2_fin
     MULI P2R, P2R, 2
 p2_fin:
-    RET
+    IRET
 
 ; =====================================================================
 ;  SRJAM: J_X <- J_X >> J_N, con "jamming": si algún bit descartado es 1,
@@ -111,7 +111,7 @@ srj_corto:
     JEQI srj_perd, 0, srj_fin
     SETLSB J_X
 srj_fin:
-    RET
+    IRET
 
 ; =====================================================================
 ;  NORM53: normaliza un operando finito distinto de cero.
@@ -122,7 +122,7 @@ fpu_norm53:
     ADDI N_E, N_E, OFF
     JEQI N_E, OFF, n53_sub
     ADDI N_M, N_F, HID                ; normal: se agrega el 1 implícito
-    RET
+    IRET
 n53_sub:                              ; subnormal: E = 1 y se corre a la izquierda
     SET N_E, OFF+1
     MOV N_M, N_F
@@ -150,7 +150,7 @@ n53_1:
     SHLI N_M, N_M, 1
     SUBI N_E, N_E, 1
 n53_fin:
-    RET
+    IRET
 
 ; =====================================================================
 ;  NRPACK: normaliza, redondea y empaqueta.
@@ -160,7 +160,7 @@ n53_fin:
 fpu_nrpack:
     JNEI R_SIG, 0, nrp_norm
     SHLI FR, R_S, 63                  ; cero con signo
-    RET
+    IRET
 nrp_norm:                             ; llevar el 1 más alto al bit 62
     JGEI R_SIG, 1<<31, nrp_16
     SHLI R_SIG, R_SIG, 32
@@ -197,7 +197,7 @@ rp_rango:
 rp_nosub:
     JLTI R_E, OFF+0x7FE, rp_redondeo
     MKINF R_S                         ; desbordamiento -> infinito
-    RET
+    IRET
 rp_redondeo:
     LOWI rp_bits, R_SIG, 10           ; los 10 bits que se descartan
     ADDI R_SIG, R_SIG, 0x200          ; sumar medio ulp
@@ -211,7 +211,7 @@ rp_empaca:                            ; FR = s<<63 + e<<52 + sig
     ADDM rp_t, rp_t, R_SIG            ;  el exponente sube solo)
     SHLI rp_u, R_S, 63
     ADDM FR, rp_t, rp_u
-    RET
+    IRET
 
 ; =====================================================================
 ;  FADD / FSUB
@@ -246,7 +246,7 @@ add_b2:
     JNEI b_m, 0, add_nocero
     MULM FR, a_s, b_s                 ; 0 + 0: negativo solo si ambos lo son
     SHLI FR, FR, 63
-    RET
+    IRET
 add_nocero:
     SHLI a_m, a_m, 9                  ; 9 bits extra de precisión
     SHLI b_m, b_m, 9
@@ -279,10 +279,10 @@ add_resta:
     SUBM R_SIG, a_m, b_m              ; signos distintos: resta de magnitudes
     JNEI R_SIG, 0, add_empaca
     SET FR, 0                         ; x - x = +0
-    RET
+    IRET
 add_empaca:
     CALL V_NRPACK
-    RET
+    IRET
     ; ---- casos especiales
 add_aesp:                             ; A es infinito o NaN
     JNEI a_f, 0, add_qa
@@ -290,20 +290,20 @@ add_aesp:                             ; A es infinito o NaN
     JNEI b_f, 0, add_qb
     JEQ a_s, b_s, add_ra              ; inf + inf (mismo signo) = inf
     SET FR, QNAN                      ; inf - inf = NaN (operación inválida)
-    RET
+    IRET
 add_besp:                             ; A finito, B infinito o NaN
     JNEI b_f, 0, add_qb
     MKINF b_s
-    RET
+    IRET
 add_ra:
     MOV FR, FA
-    RET
+    IRET
 add_qa:
     QUIET FA
-    RET
+    IRET
 add_qb:
     QUIET FB
-    RET
+    IRET
 
 ; =====================================================================
 ;  FMUL
@@ -368,7 +368,7 @@ mul_exacto:
     ADDM R_E, a_e, b_e                ; E = Ea + Eb - 1023
     SUBI R_E, R_E, OFF+1023
     CALL V_NRPACK
-    RET
+    IRET
 mul_ainf:                             ; inf * 0 = NaN ; inf * x = inf
     JNEI b_e, 0, mul_inf
     JEQI b_f, 0, mul_nan
@@ -378,19 +378,19 @@ mul_binf:
     JEQI a_f, 0, mul_nan
 mul_inf:
     MKINF R_S
-    RET
+    IRET
 mul_nan:
     SET FR, QNAN
-    RET
+    IRET
 mul_cero:
     SHLI FR, R_S, 63
-    RET
+    IRET
 mul_qa:
     QUIET FA
-    RET
+    IRET
 mul_qb:
     QUIET FB
-    RET
+    IRET
 
 ; =====================================================================
 ;  FDIV
@@ -449,7 +449,7 @@ div_exacto:
     ADDI R_E, a_e, 1024+OFF           ; E = Ea - Eb + 1024
     SUBM R_E, R_E, b_e
     CALL V_NRPACK
-    RET
+    IRET
 
 ; =====================================================================
 ;  FI2F: FR <- double(FA), FA entero de 64 bits en complemento a dos
@@ -457,7 +457,7 @@ div_exacto:
 fpu_fi2f:
     JNEI FA, 0, i2f_nocero
     SET FR, 0
-    RET
+    IRET
 i2f_nocero:
     SET R_S, 0
     MOV R_SIG, FA
@@ -473,7 +473,7 @@ i2f_pos:
     SET R_E, 1085+OFF
 i2f_ok:
     CALL V_NRPACK
-    RET
+    IRET
 
 ; =====================================================================
 ;  FF2I: FR <- int64(FA) truncado hacia cero.
@@ -484,11 +484,11 @@ fpu_ff2i:
     UNPACK FA, a_s, a_e, a_f
     JGEI a_e, 1023, f2i_1
     SET FR, 0                         ; |x| < 1
-    RET
+    IRET
 f2i_1:
     JLTI a_e, 1086, f2i_2
     SET FR, BIT63
-    RET
+    IRET
 f2i_2:
     ADDI a_m, a_f, HID
     JLTI a_e, 1075, f2i_der
@@ -504,10 +504,10 @@ f2i_signo:
     JEQI a_s, 0, f2i_pos
     RSUBI FR, UNOS64, a_m             ; complemento a dos
     ADDI FR, FR, 1
-    RET
+    IRET
 f2i_pos:
     MOV FR, a_m
-    RET
+    IRET
 
 ; =====================================================================
 ;  FCMP: FR <- 0 si FA = FB, 1 si FA < FB, 2 si FA > FB, 3 si hay NaN
@@ -539,16 +539,16 @@ cmp_magmenor:
     JMP cmp_mayor
 cmp_igual:
     SET FR, F_IGUAL
-    RET
+    IRET
 cmp_menor:
     SET FR, F_MENOR
-    RET
+    IRET
 cmp_mayor:
     SET FR, F_MAYOR
-    RET
+    IRET
 cmp_noord:
     SET FR, F_NOORD
-    RET
+    IRET
 
 ; =====================================================================
 ;  PRINTU: imprime el entero sin signo PU_X (< 10^18) en decimal, con al
@@ -576,7 +576,7 @@ pu_listo:
     MODM PU_X, PU_X, pu_p
     DIVI pu_p, pu_p, 10
     JNEI pu_p, 0, pu_listo
-    RET
+    IRET
 
 ; =====================================================================
 ;  FHEX: imprime FA como 0x + 16 dígitos hexadecimales
@@ -598,7 +598,7 @@ hx_out:
     OUT
     DIVI hx_p, hx_p, 16
     JNEI hx_p, 0, hx_ciclo
-    RET
+    IRET
 
 ; =====================================================================
 ;  FPRINT: imprime FA en decimal con FPREC cifras decimales (0..17).
@@ -619,10 +619,10 @@ pf_pos:
     LOWI pf_t, pf_x, 52
     JEQI pf_t, 0, pf_inf
     PRINTS "nan"
-    RET
+    IRET
 pf_inf:
     PRINTS "inf"
-    RET
+    IRET
 pf_finito:
     SET pf_sci, 0
     JEQI pf_x, 0, pf_ok               ; cero: notación fija
@@ -719,12 +719,12 @@ pf_fin:
     JEQI pf_dneg, 0, pf_epos
     PUTC '-'
     IPRINTV pf_dneg
-    RET
+    IRET
 pf_epos:
     PUTC '+'
     IPRINTV pf_dexp
 pf_ret:
-    RET
+    IRET
 
 ; =====================================================================
 ;  Datos del FPU

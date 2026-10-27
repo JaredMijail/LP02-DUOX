@@ -1,75 +1,127 @@
-* **Nivel 0: Registros de Control del Sistema (Por Núcleo):**
-* `PC` (Program Counter): 64 bits. Apunta a la siguiente instrucción.
-* `SP` (Stack Pointer): 64 bits. Apunta al tope de la pila en memoria.
-* `BP` (Base Pointer): 64 bits. Apunta al marco de pila actual.
-* `FLAGS` (Registro de Banderas): 64 bits (C: Carga, Z: Cero, N: Negativo, V: Desbordamiento, LOCK: Bus bloqueado, CORE_ID: Identificador de núcleo 0 o 1).
-* `MAR` (Memory Address Register) y `MBR` (Memory Buffer Register): 64 bits para el ciclo de lectura/escritura de bus.
+# ISA de la máquina DUOS
 
+Repertorio que ejecuta el emulador (`instrucciones.py`, `emuladorDuos.py`). Cada
+opcode aparece una sola vez y esta tabla es la referencia del ensamblador
+(`ensamblador.ISA`) y de las pruebas (`pruebas/prueba_isa.py`).
 
-* **Nivel 1: Caché L1 (Privada por Núcleo):** 64 KB de L1-Instruction (L1i) y 64 KB de L1-Data (L1d) por cada núcleo.
-* **Nivel 2: Caché L2 (Compartida):** 2 MB de caché unificada interconectada por un bus directo entre ambos núcleos.
-* **Nivel 3: Memoria Principal (RAM):** Memoria volátil compartida de dirección única de 64 bits.
-* **Nivel 4: Almacenamiento Secundario:** Bloque virtual de disco direccionado mediante E/S.
+## Registros
 
+* `PC` (64 bits): apunta a la siguiente instrucción.
+* `SP` (64 bits): tope de la pila de memoria, crece hacia direcciones menores.
+* `BP` (64 bits): base del marco de pila; la usan `LOAD_OFF` / `STORE_OFF`.
+* `TOS` / `NOS` (64 bits): registros de trabajo (top of stack / next on stack).
+* `PSW` (64 bits): banderas `C` (acarreo), `Z` (cero), `N` (negativo),
+  `V` (desbordamiento), `I` (interrupciones habilitadas), `LOCK` (bus bloqueado)
+  y `CORE_ID` (0 o 1, solo lectura).
 
-El sistema extiende los tres buses del modelo Von Neumann clásico para coordinar el acceso concurrente entre ambos núcleos:
+Cada núcleo tiene su propio juego de registros y de `PSW`; la RAM, los puertos y
+el NIC son compartidos. `MAR`/`MBR` y las cachés L1/L2 no están modelados.
 
-* **Bus de Datos (64 bits):** Canal bidireccional por donde transitan operandos, resultados e instrucciones entre la memoria principal, las cachés, la CPU y la Unidad de E/S.
-* **Bus de Direcciones (64 bits):** Unidireccional desde los núcleos o la unidad DMA hacia la memoria, permitiendo direccionar $2^{64}$ bytes.
-* **Bus de Control:** Transporta señales de reloj, lectura/escritura (`READ`/`WRITE`), interrupciones (`IRQ0`-`IRQ7`), señales de arbitraje multinúcleo (`BUS_LOCK`, `BUS_GRANT`) y señales de sincronización entre núcleos.
-* **Unidad de Entrada/Salida e Interfaz de Red (NIC):** La unidad E/S incluye una interfaz de red Ethernet emulada (NIC) mapeada en memoria. Posee registros E/S de 64 bits para enviar y recibir paquetes (*Network Sockets*), gestionando colas RX/TX con acceso directo a memoria (DMA).
+## Formato de instrucción
 
+| Formato | Longitud | Estructura |
+| --- | --- | --- |
+| **Tipo 0** | 1 byte | `[ Opcode ]` |
+| **Tipo 1** | 9 bytes | `[ Opcode ]` + `[ Operando 64-bit ]` (inmediato, dirección o destino) |
+| **Tipo 2** | 17 bytes | `[ Opcode ]` + `[ Origen 64-bit ]` + `[ Destino 64-bit ]` |
 
-| Formato | Longitud | Estructura del Byte / Palabra | Uso Principal |
-| --- | --- | --- | --- |
-| **Tipo 0 (Cero Operandos)** | 1 Byte | `[ Opcode (8-bit) ]` | Operaciones sobre la pila (`ADD`, `MUL`, `POP`, etc.) |
-| **Tipo 1 (Un Operando Inmediato/Dir)** | 9 Bytes | `[ Opcode (8-bit) ]` + `[ Valor/Dirección (64-bit) ]` | Salto de control o Push explícito (`PUSH 0x0F`, `JMP addr`) |
-| **Tipo 2 (Dos Direcciones)** | 17 Bytes | `[ Opcode (8-bit) ]` + `[ Dir_Origen (64-bit) ]` + `[ Dir_Destino (64-bit) ]` | Copia de bloques o memoria a memoria directos (`MEM_COPY`) |
+Los operandos son palabras de 64 bits en big-endian. Los saltos usan la
+dirección absoluta.
 
+## Banderas
 
-| Módulo / Categoría | Código Mnemónico | Opcode (Hex) | Formato | Descripción Funcional |
+* `Z` y `N`: se actualizan en toda operación aritmética o lógica.
+* `C` y `V`: solo en `ADD` y `SUB` (`C` = acarreo o préstamo, `V` = desbordamiento
+  con signo); el resto de operaciones las pone a 0.
+* `I`: la cambian `EI`, `DI` e `IRET`; `INT` la guarda en la pila antes de saltar.
+* `LOCK`: la cambian `LOCK`, `UNLOCK` y `SET_FLAGS`.
+* `GET_FLAGS` / `SET_FLAGS` empaquetan así: bit 0 `C`, 1 `Z`, 2 `N`, 3 `V`,
+  4 `LOCK`, bits 8-15 `CORE_ID` (solo lectura).
+
+## Instrucciones
+
+| Categoría | Mnemónico | Opcode | Formato | Descripción funcional |
 | --- | --- | --- | --- | --- |
-| **Aritmética y Lógica** | `NOP` | `0x00` | Tipo 0 | No realiza operación. |
-|  | `ADD` | `0x01` | Tipo 0 | Desapila 2 valores, los suma y apila el resultado. |
-|  | `SUB` | `0x02` | Tipo 0 | Desapila $A$ y $B$, apila $B - A$. |
-|  | `MUL` | `0x03` | Tipo 0 | Multiplica los dos valores superiores de la pila. |
-|  | `DIV` | `0x04` | Tipo 0 | Divide los dos valores superiores de la pila. |
-|  | `MOD` | `0x05` | Tipo 0 | Obtiene el residuo de la división en la pila. |
-|  | `AND` | `0x06` | Tipo 0 | Operación AND bit a bit entre TOS y TOS-1. |
-|  | `OR` | `0x07` | Tipo 0 | Operación OR bit a bit entre TOS y TOS-1. |
-|  | `XOR` | `0x08` | Tipo 0 | Operación XOR bit a bit. |
-|  | `NOT` | `0x09` | Tipo 0 | Invierte los bits del elemento en el tope de la pila. |
-|  | `SHL` | `0x0A` | Tipo 0 | Desplazamiento a la izquierda del valor TOS por $N$ posiciones. |
-|  | `SHR` | `0x0B` | Tipo 0 | Desplazamiento a la derecha. |
-| **Pila y Memoria** | `PUSH val64` | `0x10` | Tipo 1 | Empuja un valor inmediato de 64 bits a la pila. |
-|  | `POP` | `0x11` | Tipo 0 | Elimina el elemento superior de la pila. |
-|  | `DUP` | `0x12` | Tipo 0 | Duplica el elemento superior de la pila. |
-|  | `SWAP` | `0x13` | Tipo 0 | Intercambia los dos elementos del tope de la pila. |
-|  | `LOAD addr64` | `0x14` | Tipo 1 | Lee de la RAM en `addr64` y lo apila. |
-|  | `STORE addr64` | `0x15` | Tipo 1 | Desapila el valor e ingresa en la RAM en `addr64`. |
-|  | `LOAD_OFF` | `0x16` | Tipo 0 | Lee de RAM usando `BP + Offset` (desapilado). |
-|  | `STORE_OFF` | `0x17` | Tipo 0 | Escribe en RAM usando `BP + Offset` (desapilado). |
-| **Control de Flujo** | `JMP addr64` | `0x20` | Tipo 1 | Salto incondicional a la dirección especificada. |
-|  | `JZ addr64` | `0x21` | Tipo 1 | Salta si la bandera `Z` (Zero) está activa. |
-|  | `JNZ addr64` | `0x22` | Tipo 1 | Salta si la bandera `Z` no está activa. |
-|  | `JGT addr64` | `0x23` | Tipo 1 | Salta si la comparación es mayor. |
-|  | `JLT addr64` | `0x24` | Tipo 1 | Salta si la comparación es menor. |
-|  | `CALL addr64` | `0x25` | Tipo 1 | Apila la dirección de retorno y salta a la subrutina. |
-|  | `RET` | `0x26` | Tipo 0 | Retorna de la subrutina desapilando el `PC`. |
-|  | `HALT` | `0x27` | Tipo 0 | Detiene la ejecución del núcleo actual. |
-| **Concurrencia y Núcleos** | `GET_CORE` | `0x30` | Tipo 0 | Apila el ID del núcleo en ejecución (0 o 1). |
-|  | `LOCK` | `0x31` | Tipo 0 | Activa el cerrojo de bus de hardware para exclusión mutua. |
-|  | `UNLOCK` | `0x32` | Tipo 0 | Libera el cerrojo de bus. |
-|  | `CORE_START` | `0x33` | Tipo 1 | Inicia el Núcleo 1 apuntando su `PC` a la dirección dada. |
-|  | `CORE_YIELD` | `0x34` | Tipo 0 | Cede el ciclo de ejecución en el bus al otro núcleo. |
-| **E/S y Red** | `IN_PORT` | `0x40` | Tipo 0 | Lee datos del puerto indicado en TOS. |
-|  | `OUT_PORT` | `0x41` | Tipo 0 | Escribe el dato TOS-1 en el puerto TOS. |
-|  | `NET_SEND` | `0x42` | Tipo 0 | Envía el buffer apuntado en la pila mediante el NIC. |
-|  | `NET_RECV` | `0x43` | Tipo 0 | Recibe datos del socket de red hacia la pila/RAM. |
-|  | `NET_STAT` | `0x44` | Tipo 0 | Obtiene el estado del controlador de red. |
-| **Sistema y Caché** | `CACHE_FLUSH` | `0x50` | Tipo 0 | Sincroniza la Caché L1/L2 con la Memoria RAM. |
-|  | `MEM_COPY` | `0x51` | Tipo 2 | Copia directa por bloque entre dos zonas de memoria. |
-|  | `SET_FLAGS` | `0x52` | Tipo 0 | Actualiza el registro `FLAGS` desapilando el valor. |
-|  | `GET_FLAGS` | `0x53` | Tipo 0 | Apila el estado actual del registro `FLAGS`. |
-|  | `INT num` | `0x54` | Tipo 1 | Genera una interrupción por software. |
+| **Aritmética y lógica** | `NOP` | `0x00` | Tipo 0 | No realiza operación. |
+|  | `ADD` | `0x01` | Tipo 0 | `TOS <- TOS + NOS`; actualiza `Z N C V`. |
+|  | `SUB` | `0x02` | Tipo 0 | `TOS <- NOS - TOS`; actualiza `Z N C V`. |
+|  | `MUL` | `0x03` | Tipo 0 | `TOS <- TOS * NOS`; actualiza `Z N`. |
+|  | `DIV` | `0x04` | Tipo 0 | `TOS <- TOS // NOS` (cociente entero); actualiza `Z N`. Detiene el núcleo si `NOS = 0`. |
+|  | `MOD` | `0x05` | Tipo 0 | `TOS <- TOS % NOS`; actualiza `Z N`. Detiene el núcleo si `NOS = 0`. |
+|  | `AND` | `0x06` | Tipo 0 | `TOS <- TOS & NOS`; actualiza `Z N`. |
+|  | `OR` | `0x07` | Tipo 0 | `TOS <- TOS \| NOS`; actualiza `Z N`. |
+|  | `XOR` | `0x08` | Tipo 0 | `TOS <- TOS ^ NOS`; actualiza `Z N`. |
+|  | `NOT` | `0x09` | Tipo 0 | `TOS <- ~TOS` (complemento a 64 bits); actualiza `Z N`. |
+|  | `SHL` | `0x0A` | Tipo 0 | `TOS <- (NOS << TOS) mod 2^64`; actualiza `Z N`. |
+|  | `SHR` | `0x0B` | Tipo 0 | `TOS <- NOS >> TOS` (lógico, 64 bits); actualiza `Z N`. |
+| **Pila y memoria** | `PUSH` | `0x10` | Tipo 1 | `NOS <- TOS`; `TOS <- inmediato`. |
+|  | `POP` | `0x11` | Tipo 0 | `TOS <- NOS`; `NOS <- 0`. |
+|  | `DUP` | `0x12` | Tipo 0 | `NOS <- TOS` (duplica el tope). |
+|  | `SWAP` | `0x13` | Tipo 0 | Intercambia `TOS` y `NOS`. |
+|  | `LOAD` | `0x14` | Tipo 1 | `NOS <- TOS`; `TOS <- MEM[dir]`. |
+|  | `STORE` | `0x15` | Tipo 1 | `MEM[dir] <- TOS`. |
+|  | `LOAD_OFF` | `0x16` | Tipo 0 | Desapila el desplazamiento y empuja `MEM[BP + desplazamiento]`. |
+|  | `STORE_OFF` | `0x17` | Tipo 0 | Desapila el desplazamiento y el valor; `MEM[BP + desplazamiento] <- valor`. |
+|  | `LOAD_IMM` | `0x18` | Tipo 1 | `TOS <- inmediato` (alias `LDI`); actualiza `Z N`. |
+| **Control de flujo** | `JMP` | `0x20` | Tipo 1 | `PC <- dir`. |
+|  | `JZ` | `0x21` | Tipo 1 | Salta si `Z = 1`. |
+|  | `JNZ` | `0x22` | Tipo 1 | Salta si `Z = 0`. |
+|  | `JGT` | `0x23` | Tipo 1 | Salta si `Z = 0` y `N = V` (mayor, con signo). |
+|  | `JLT` | `0x24` | Tipo 1 | Salta si `N != V` (menor, con signo). |
+|  | `CALL` | `0x25` | Tipo 1 | Apila `PC + 9` en la pila de memoria y salta a `dir`. |
+|  | `RET` | `0x26` | Tipo 0 | `PC <-` desapila de la pila de memoria. |
+|  | `HALT` | `0x27` | Tipo 0 | Detiene el núcleo actual. |
+| **Concurrencia** | `GET_CORE` | `0x30` | Tipo 0 | Empuja `CORE_ID`. |
+|  | `LOCK` | `0x31` | Tipo 0 | `LOCK <- 1` (cerrojo de bus). |
+|  | `UNLOCK` | `0x32` | Tipo 0 | `LOCK <- 0`. |
+|  | `CORE_START` | `0x33` | Tipo 1 | Arranca el núcleo 1 con `PC <- dir`; copia `SP = BP = 0xF800`. |
+|  | `CORE_YIELD` | `0x34` | Tipo 0 | Fuerza el cambio de turno. |
+| **E/S y red** | `IN_PORT` | `0x40` | Tipo 0 | `puerto <- TOS` (desapila); empuja el valor del puerto (0 si no se escribió). |
+|  | `OUT_PORT` | `0x41` | Tipo 0 | `puerto <- TOS`, `valor <- NOS` (desapila ambos); `puertos[puerto] <- valor`. |
+|  | `NET_SEND` | `0x42` | Tipo 0 | `largo <- TOS`, `dir <- NOS` (desapila ambos); envía `MEM[dir .. dir+largo)` al NIC. |
+|  | `NET_RECV` | `0x43` | Tipo 0 | `largo <- TOS`, `dir <- NOS`; copia hasta `largo` bytes del paquete recibido en `MEM[dir]` y empuja los bytes copiados. |
+|  | `NET_STAT` | `0x44` | Tipo 0 | Empuja los bytes pendientes en la cola de recepción. |
+|  | `OUT` | `0x45` | Tipo 0 | Escribe `chr(TOS & 0xFF)` en la consola. |
+| **Sistema** | `CACHE_FLUSH` | `0x50` | Tipo 0 | Sin efecto: no hay caché modelada. |
+|  | `MEM_COPY` | `0x51` | Tipo 2 | `n <- TOS` (desapila); copia `n` palabras desde origen a destino (solapamiento seguro). |
+|  | `SET_FLAGS` | `0x52` | Tipo 0 | Desapila y actualiza `C Z N V LOCK`. |
+|  | `GET_FLAGS` | `0x53` | Tipo 0 | Empuja el estado de las banderas. |
+|  | `INT` | `0x54` | Tipo 0 | `vector <- TOS`; apila `PC + 1` y `PSW.I` en la pila de memoria; `PC <- MEM[vector * 8]`. |
+|  | `IRET` | `0x55` | Tipo 0 | `PSW.I <-` desapila; `PC <-` desapila. |
+|  | `EI` | `0x56` | Tipo 0 | `I <- 1`. |
+|  | `DI` | `0x57` | Tipo 0 | `I <- 0`. |
 
+## Pila
+
+`TOS`/`NOS` forman una pila de dos registros: `PUSH` corre `TOS` a `NOS` y las
+operaciones dejan el resultado en `TOS`. La pila de memoria (`SP`), separada,
+guarda direcciones de retorno y el estado de las interrupciones; `CALL`, `RET`,
+`INT`, `IRET` y las interrupciones de teclado son sus únicos usuarios.
+
+## Mapa de memoria
+
+| Zona | Rango | Uso |
+| --- | --- | --- |
+| Vectores | `0x0000 - 0x0078` | 0 teclado, 1 print; 2-7 librería `mate.inc`; 8-15 libres |
+| ISR | `0x0100` | `IRET` del teclado |
+| Llamada al sistema | `0x0200` | `LOAD` + `OUT` + `IRET` de impresión |
+| Programa | `0x1000 - 0xEFFF` | código y datos del usuario |
+| Pilas | `0xF000 - 0xFFFF` | núcleo 0 desde `0xFFFF`, núcleo 1 desde `0xF800` (2 KB cada una, sin protección) |
+
+La RAM emulada es de 64 KB (direcciones de 16 bits), aunque el bus de direcciones
+del diseño sea de 64 bits.
+
+## Concurrencia
+
+Los dos núcleos se turnan un ciclo por vez (turno rotativo). `CORE_START` arranca
+el núcleo 1 y `HALT` detiene solo el núcleo que la ejecuta; la máquina se detiene
+cuando se han detenido los dos. `LOCK`/`UNLOCK` marcan el cerrojo de bus en `PSW`
+(no hay coherencia de caché que proteger) y `CORE_YIELD` adelanta el cambio de
+turno.
+
+## E/S, red e interrupciones
+
+Los puertos son un diccionario de 64 bits: leer un puerto no escrito devuelve 0.
+El NIC es loopback: lo que se envía con `NET_SEND` queda en la cola de recepción
+para `NET_RECV`, y `NET_STAT` informa los bytes pendientes. La interrupción de
+teclado se entrega al núcleo en ejecución cuando `PSW.I = 1`, usando el vector 0.

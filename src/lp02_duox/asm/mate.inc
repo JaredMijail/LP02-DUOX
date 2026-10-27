@@ -552,7 +552,7 @@ mt_rut_sqrt:
     JEQI mt_sq_t, 0x7FF, msq_fin       ; +inf o NaN
     JLTI mt_sq_t, 0x800, msq_pos
     SET MT_R, MT_NAN                   ; x < 0
-    RET
+    IRET
 msq_pos:
     SHRI mt_sq_y, MT_A, 1              ; semilla: exponente dividido entre 2
     ADDI mt_sq_y, mt_sq_y, MT_SEMILLA
@@ -571,7 +571,7 @@ msq_sigue:
 msq_listo:
     MOV MT_R, mt_sq_y
 msq_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  V_MEXP: MT_R <- e^MT_A
@@ -590,7 +590,7 @@ mt_rut_exp:
     SHRI mt_ex_c, mt_ex_x, 63
     JEQI mt_ex_c, 0, mex_fin
     SET MT_R, 0                        ; ...o se vuelve 0
-    RET
+    IRET
 mex_rango:
     SET mt_ex_k, 0
 mex_mitad:
@@ -622,7 +622,7 @@ mex_signo:
     JEQI mt_ex_c, 0, mex_fin
     FDIVV MT_R, MT_UNO, mt_ex_s        ; x < 0: e^x = 1 / e^|x|
 mex_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  V_MLN: MT_R <- ln(MT_A)
@@ -675,7 +675,7 @@ mln_junta:                             ; ln x = E ln2 + 2 s
     FADDV mt_ln_s, mt_ln_s, mt_ln_s
     FADDV MT_R, mt_ln_u, mt_ln_s
 mln_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  V_MSIN / V_MCOS: MT_R <- sen(MT_A) / cos(MT_A)
@@ -717,7 +717,7 @@ mtg_termino:
 mtg_listo:
     MOV MT_R, mt_tg_s
 mtg_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  V_MMCM: MT_R <- MCM(|MT_A|, |MT_B|) = |a| / MCD * |b|  (0 si alguno es 0)
@@ -732,7 +732,7 @@ mt_rut_mcm:
     DIVM MT_R, mt_mm_a, mt_mm_g
     MULM MT_R, MT_R, mt_mm_b
 mmc_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  Constantes y temporales

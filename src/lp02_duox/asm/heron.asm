@@ -75,7 +75,7 @@ h_fin:
     SET PU_W, 1
     CALL V_PRINTU
     PRINTS " iteraciones)\n"
-    RET
+    IRET
 
 ; ---------------------------------------------------------------- datos
 c125:   .DOUBLE 125.0

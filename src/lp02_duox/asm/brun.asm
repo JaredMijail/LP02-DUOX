@@ -90,7 +90,7 @@ fila:
     FADDV br_t, br_s, br_t
     FPRINTV br_t
     NL
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  es_primo: IP_R <- 1 si IP_N (de la forma 6k+-1, >= 5) es primo, si no 0
@@ -111,7 +111,7 @@ ip_ciclo:
 ip_comp:
     SET IP_R, 0
 ip_fin:
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  ln: LN_R <- ln(LN_X) para LN_X double normal y positivo
@@ -142,7 +142,7 @@ ln_ciclo:
     FADDV ln_sum, ln_sum, ln_sum  ; 2*suma
     FMULV ln_u, ln_k, dLN2
     FADDV LN_R, ln_u, ln_sum
-    RET
+    IRET
 
 ; ---------------------------------------------------------------- datos
 d1:    .DOUBLE 1.0

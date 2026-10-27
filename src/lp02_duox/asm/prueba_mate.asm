@@ -263,11 +263,11 @@ chk_ent:
     ISPRINTV CK_E
     JEQ CK_R, CK_E, chk_ok
     PRINTS "  FALLO\n"
-    RET
+    IRET
 chk_ok:
     ADDI ok_n, ok_n, 1
     PRINTS "  OK\n"
-    RET
+    IRET
 
 ; ---------------------------------------------------------------------
 ;  chk_flo: imprime CK_R y CK_E (double) y los compara con tolerancia
@@ -291,7 +291,7 @@ cf_escala:
     JEQI cf_c, F_MENOR, chk_ok
     JEQI cf_c, F_IGUAL, chk_ok
     PRINTS "  FALLO\n"
-    RET
+    IRET
 
 ; ---------------------------------------------------------------- datos
 f_0:     .DOUBLE 0.0

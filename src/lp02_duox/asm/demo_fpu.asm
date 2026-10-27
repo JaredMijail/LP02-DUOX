@@ -110,7 +110,7 @@ muestra:
     PRINTS "   ["
     FHEXV DR
     PRINTS "]\n"
-    RET
+    IRET
 
 ; --- imprime los campos de DX
 campos:
@@ -128,7 +128,7 @@ campos:
     PRINTS "  valor="
     FPRINTV DX
     NL
-    RET
+    IRET
 
 v1:      .DOUBLE 1.0
 vm1:     .DOUBLE -1.0

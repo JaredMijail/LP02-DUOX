@@ -1,21 +1,22 @@
 ; =====================================================================
-;  macros.inc  -  Macros de la máquina DUOS (Tarea 10, Grupo F)
+;  macros.inc  -  Macros de la máquina DUOS
 ;
-;  La máquina tiene dos registros de trabajo (TOS y NOS) y su ISA no
-;  incluye AND/OR, desplazamientos, comparaciones con signo, CALL/RET ni
-;  direccionamiento indirecto. Estas macros construyen un "lenguaje de
-;  memoria a memoria" usando SOLO las instrucciones nativas:
+;  La máquina tiene dos registros de trabajo (TOS y NOS). Estas macros arman
+;  un "lenguaje de memoria a memoria" sobre las instrucciones nativas:
 ;
 ;    desplazamiento a la izquierda k   =  MUL por 2^k
 ;    desplazamiento a la derecha  k    =  DIV por 2^k
 ;    AND con (2^k - 1)                 =  MOD por 2^k
 ;    a < b  (0 <= a,b < 2^63)          =  (a - b + 2^63) DIV 2^63 == 0
-;    CALL n / RET                      =  INT n / IRET (interrupción de software)
+;    CALL n / RET                      =  INT n / IRET (llamada por vector)
 ;
-;  Recordatorio de la semántica nativa (ver ensamblador.py):
+;  CALL es aquí la llamada por vector: el ISA tiene CALL/RET nativos por
+;  dirección, pero la librería se despacha con la tabla de vectores.
+;
+;  Recordatorio de la semántica nativa (ver docs/ISA_CPU.md):
 ;    LOAD x  : NOS <- TOS ; TOS <- MEM[x]      PUSH v : NOS <- TOS ; TOS <- v
-;    ADD/MUL : TOS <- TOS (+,*) NOS            SUB    : TOS <- NOS - TOS ; Z
-;    DIV/MOD : TOS <- TOS (//,%) NOS           (¡orden inverso al de SUB!)
+;    ADD/MUL : TOS <- TOS (+,*) NOS            SUB    : TOS <- NOS - TOS
+;    DIV/MOD : TOS <- TOS (//,%) NOS
 ;  Todas las variables de memoria contienen enteros sin signo de 64 bits.
 ; =====================================================================
 

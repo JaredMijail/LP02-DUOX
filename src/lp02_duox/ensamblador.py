@@ -1,34 +1,27 @@
 """
-Ensamblador para la máquina DUOS (Tarea 10, Grupo F).
+Ensamblador para la máquina DUOS.
 
 Traduce un programa escrito con mnemónicos a la cadena hexadecimal de código
-de máquina que entiende el cargador de la Tarea 10. NO amplía el repertorio de
-instrucciones: cada macro se expande únicamente a instrucciones nativas.
+de máquina que entiende el cargador. NO amplía el repertorio de instrucciones:
+cada macro se expande únicamente a instrucciones nativas.
 
-Repertorio nativo (codificación idéntica a la del emulador de la Tarea 10):
+Repertorio nativo (opcodes y formatos de docs/ISA_CPU.md):
 
-    Mnemónico      Opcode  Bytes  Efecto
-    HALT           00      1      detiene la máquina
-    ADD            01      1      TOS <- TOS + NOS
-    SUB            02      1      TOS <- NOS - TOS ; Z <- (TOS == 0)
-    MUL            03      1      TOS <- TOS * NOS
-    DIV            04      1      TOS <- TOS // NOS
-    MOD            05      1      TOS <- TOS % NOS
-    INT            07      1      apila PC+1 y PSW.I ; PC <- MEM[TOS*8]
-    IRET (RET)     08      1      desapila PSW.I y PC
-    EI / DI        09/0A   1      habilita / deshabilita interrupciones
-    OUT            0B      1      escribe el carácter TOS & 0xFF
-    LDI  imm       99      9      TOS <- imm            (LOAD_IMM)
-    PUSH imm       10      9      NOS <- TOS ; TOS <- imm
-    POP            11      9      TOS <- NOS ; NOS <- 0 (ocupa 9 bytes)
-    SWAP           13      1      intercambia TOS y NOS
-    STORE dir      20      12     MEM[dir] <- TOS
-    LOAD  dir      21      12     NOS <- TOS ; TOS <- MEM[dir]
-    JZ   etiqueta  28      9      si Z: PC <- 0x1000 + desplazamiento
-    JMP  etiqueta  29      9      PC <- 0x1000 + desplazamiento
+    Tipo 0 (1 byte): operan sobre TOS/NOS
+        NOP 00  ADD 01  SUB 02  MUL 03  DIV 04  MOD 05  AND 06  OR 07
+        XOR 08  NOT 09  SHL 0A  SHR 0B  POP 11  DUP 12  SWAP 13
+        LOAD_OFF 16  STORE_OFF 17  RET 26  HALT 27  GET_CORE 30  LOCK 31
+        UNLOCK 32  CORE_YIELD 34  IN_PORT 40  OUT_PORT 41  NET_SEND 42
+        NET_RECV 43  NET_STAT 44  OUT 45  CACHE_FLUSH 50  SET_FLAGS 52
+        GET_FLAGS 53  INT 54  IRET 55  EI 56  DI 57
+    Tipo 1 (9 bytes): opcode + operando de 64 bits
+        PUSH 10 imm  LOAD 14 dir  STORE 15 dir  LOAD_IMM 18 imm (LDI)
+        JMP 20 addr  JZ 21 addr  JNZ 22 addr  JGT 23 addr  JLT 24 addr
+        CALL 25 addr  CORE_START 33 addr
+    Tipo 2 (17 bytes): opcode + dos direcciones de 64 bits
+        MEM_COPY 51 src, dst
 
-(DUP 0x12 está declarado en instrucciones.py pero no figura en la tabla de
-despacho del emulador, así que el ensamblador lo rechaza.)
+Las de tipo 0 dejan el resultado en TOS; los saltos usan la dirección absoluta.
 
 Directivas:
     etiqueta:                 define una etiqueta (dirección absoluta)
@@ -44,7 +37,7 @@ Directivas:
     PRINTS "texto"            pseudo-instrucción: PUSH c ; OUT por carácter
     PUTC expr                 pseudo-instrucción: PUSH expr ; OUT
 
-Expresiones: enteros (decimal, 0x.., 0b..), 'c', nombres, + - * // % << >>
+Expresiones: enteros (decimal, 0x.., 0b..), 'c', nombres, + - * // % << >> 
 & | ^ ** y paréntesis.
 
 Uso:
@@ -67,30 +60,57 @@ LIMITE_SEGURO = 0xF000  # por encima está la pila del sistema (SP = 0xFFFF)
 
 # mnemónico -> (opcode, bytes totales, tipo de operando)
 #   None: sin operando ; "imm": inmediato de 8 bytes ; "dir": dirección de 8
-#   bytes + 3 de relleno ; "salto": desplazamiento respecto a BASE ;
-#   "relleno": 8 bytes en cero (POP)
+#   bytes ; "addr": destino absoluto de 8 bytes ; "bloque": dos direcciones.
 ISA = {
-    "HALT": (0x00, 1, None),
+    "NOP": (0x00, 1, None),
     "ADD": (0x01, 1, None),
     "SUB": (0x02, 1, None),
     "MUL": (0x03, 1, None),
     "DIV": (0x04, 1, None),
     "MOD": (0x05, 1, None),
-    "INT": (0x07, 1, None),
-    "IRET": (0x08, 1, None),
-    "RET": (0x08, 1, None),
-    "EI": (0x09, 1, None),
-    "DI": (0x0A, 1, None),
-    "OUT": (0x0B, 1, None),
-    "LDI": (0x99, 9, "imm"),
-    "LOAD_IMM": (0x99, 9, "imm"),
+    "AND": (0x06, 1, None),
+    "OR": (0x07, 1, None),
+    "XOR": (0x08, 1, None),
+    "NOT": (0x09, 1, None),
+    "SHL": (0x0A, 1, None),
+    "SHR": (0x0B, 1, None),
     "PUSH": (0x10, 9, "imm"),
-    "POP": (0x11, 9, "relleno"),
+    "POP": (0x11, 1, None),
+    "DUP": (0x12, 1, None),
     "SWAP": (0x13, 1, None),
-    "STORE": (0x20, 12, "dir"),
-    "LOAD": (0x21, 12, "dir"),
-    "JZ": (0x28, 9, "salto"),
-    "JMP": (0x29, 9, "salto"),
+    "LOAD": (0x14, 9, "dir"),
+    "STORE": (0x15, 9, "dir"),
+    "LOAD_OFF": (0x16, 1, None),
+    "STORE_OFF": (0x17, 1, None),
+    "LOAD_IMM": (0x18, 9, "imm"),
+    "LDI": (0x18, 9, "imm"),
+    "JMP": (0x20, 9, "addr"),
+    "JZ": (0x21, 9, "addr"),
+    "JNZ": (0x22, 9, "addr"),
+    "JGT": (0x23, 9, "addr"),
+    "JLT": (0x24, 9, "addr"),
+    "CALL": (0x25, 9, "addr"),
+    "RET": (0x26, 1, None),
+    "HALT": (0x27, 1, None),
+    "GET_CORE": (0x30, 1, None),
+    "LOCK": (0x31, 1, None),
+    "UNLOCK": (0x32, 1, None),
+    "CORE_START": (0x33, 9, "addr"),
+    "CORE_YIELD": (0x34, 1, None),
+    "IN_PORT": (0x40, 1, None),
+    "OUT_PORT": (0x41, 1, None),
+    "NET_SEND": (0x42, 1, None),
+    "NET_RECV": (0x43, 1, None),
+    "NET_STAT": (0x44, 1, None),
+    "OUT": (0x45, 1, None),
+    "CACHE_FLUSH": (0x50, 1, None),
+    "MEM_COPY": (0x51, 17, "bloque"),
+    "SET_FLAGS": (0x52, 1, None),
+    "GET_FLAGS": (0x53, 1, None),
+    "INT": (0x54, 1, None),
+    "IRET": (0x55, 1, None),
+    "EI": (0x56, 1, None),
+    "DI": (0x57, 1, None),
 }
 
 
@@ -335,7 +355,10 @@ class Ensamblador:
                 self.equs[a[0]] = a[1]
                 continue
             if op == ".VAR":
-                for nombre in _dividir_args(resto):
+                nombres = _dividir_args(resto)
+                if not nombres:
+                    raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: .VAR sin nombres")
+                for nombre in nombres:
                     if nombre in self.simbolos:
                         raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: variable repetida {nombre}")
                     self.simbolos[nombre] = dir_
@@ -358,17 +381,15 @@ class Ensamblador:
                                                tam=8 * len(vals), origen=ln))
                 dir_ += 8 * len(vals)
                 continue
-            if op == "DUP":
-                raise ErrorEnsamblador(
-                    f"{ln.archivo}:{ln.num}: DUP no está en la tabla de despacho del "
-                    "emulador de la Tarea 10 (la máquina se detendría)")
             if op not in ISA:
                 raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: instrucción desconocida '{op}'")
             opcode, tam, tipo = ISA[op]
-            if tipo in ("imm", "dir", "salto") and not resto:
+            if tipo in ("imm", "dir", "addr", "bloque") and not resto:
                 raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: {op} necesita un operando")
-            if tipo in (None, "relleno") and resto:
+            if tipo is None and resto:
                 raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: {op} no lleva operando")
+            if tipo == "bloque" and len(_dividir_args(resto)) != 2:
+                raise ErrorEnsamblador(f"{ln.archivo}:{ln.num}: {op} necesita dos direcciones")
             self.elementos.append(Elemento("instr", mnem=op, expr=resto or None,
                                            dir=dir_, tam=tam, origen=ln))
             dir_ += tam
@@ -394,14 +415,18 @@ class Ensamblador:
                     v = self.evaluar(el.expr)
                     if not (0 <= v <= 0xFFF8):
                         raise ErrorEnsamblador(f"dirección fuera de la RAM: {el.expr}")
-                    b += v.to_bytes(8, "big") + bytes(3)
-                elif tipo == "salto":
+                    b += v.to_bytes(8, "big")
+                elif tipo == "addr":
                     v = self.evaluar(el.expr)
-                    if v < BASE:
-                        raise ErrorEnsamblador(f"destino de salto antes de 0x1000: {el.expr}")
-                    b += (v - BASE).to_bytes(8, "big")
-                elif tipo == "relleno":
-                    b += bytes(8)
+                    if not (0 <= v <= 0xFFFF):
+                        raise ErrorEnsamblador(f"destino fuera de la RAM: {el.expr}")
+                    b += v.to_bytes(8, "big")
+                elif tipo == "bloque":
+                    for arg in _dividir_args(el.expr):
+                        v = self.evaluar(arg)
+                        if not (0 <= v <= 0xFFF8):
+                            raise ErrorEnsamblador(f"dirección fuera de la RAM: {arg}")
+                        b += v.to_bytes(8, "big")
                 assert len(b) == tam
                 codigo += b
             except ErrorEnsamblador as e:
