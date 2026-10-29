@@ -27,10 +27,10 @@ class LinkerLoader:
     def addAbsLabel(self, index):
         string = self.data[index].split(" ")
         label = string[-1].strip("{}")
-        label = hex(int(label)).split('x')[-1]
+        label = self.hexHelper(int(label)+ self.programStart)
         key = "{}".format(label)
         string[-1] = key
-        self.data[index] = " ".join(string)
+        self.data[index] = self.data[index][0:3] + label
 
     def addAbsDir(self, index):
         string = self.data[index].split(" ")
@@ -75,6 +75,20 @@ class LinkerLoader:
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
+    def hexHelper(self, int):
+        hex_string = '0x{:02x}'.format(int).split('x')[-1] 
+        string = ["00" ,"00" ,"00", "00", "00", "00", "00", "00"]
+        hexList = [hex_string[i:i+2] for i in range(0,len(hex_string),2)][::-1]
+        i = len(hexList) -1
+        while i>=0:
+            string[-i-1] = hexList[i]
+            i -= 1
+
+        string = " ".join(string)
+        return string
+        
+
+
 
 #Programa de prueba, calculo de factorial de 5 a absoluto
 data = '''
@@ -101,12 +115,14 @@ data = '''
 file = open("resultLexer.txt", "r")
 data = file.read()
 file.close
-asm = LinkerLoader(data, 1000)
+
+#El inicio del programa debe ser el mismo que el del archivo config
+asm = LinkerLoader(data, 0x1000)
 asm.parseFile()
 asm.showResult()
 f = open("resultLinker.txt", "x")
 for i in range(len(asm.data)):
     f.write(asm.data[i])
-    f.write("\n")
+    f.write("\n") 
 
 
