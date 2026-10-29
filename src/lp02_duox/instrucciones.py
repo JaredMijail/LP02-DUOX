@@ -235,14 +235,16 @@ class Instrucciones():
 
     # --------------------------------------------------- control de flujo
     def _op_jmp(self) -> None:
-        self.PC = self.leer_mem(self.PC + 1)
+        offset = self.leer_mem(self.PC + 1)
+        self.PC = Global.PROGRAMA_BASE + offset
         print(f"JMP 0x{self.PC:04X}")
+        
 
     def _salto(self, condicion: bool, nombre: str) -> None:
         destino = self.leer_mem(self.PC + 1)
         if condicion:
-            print(f"{nombre} 0x{destino:04X}")
-            self.PC = destino
+            self.PC = Global.PROGRAMA_BASE +  destino
+            print(f"{nombre} 0x{self.PC:04X}")
         else:
             self.PC += 9
 
