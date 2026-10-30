@@ -34,6 +34,7 @@ class LinkerLoader:
 
     def addAbsDir(self, index):
         string = self.data[index].split(" ")
+        print(string)
         label = ord(string[-1].strip("{}")) - 65
         label = str(int(label)*100 + self.dirStart)
         key = "00 00 00 00 00 00 {} {}".format(label[0:2], label[2:4])
@@ -114,7 +115,7 @@ data = '''
 #Resultado del lexerAssembler del calculo de 5 factorial.
 file = open("resultLexer.txt", "r")
 data = file.read()
-file.close
+file.close()
 
 #El inicio del programa debe ser el mismo que el del archivo config
 asm = LinkerLoader(data, 0x1000)
@@ -123,6 +124,6 @@ asm.showResult()
 f = open("resultLinker.txt", "x")
 for i in range(len(asm.data)):
     f.write(asm.data[i])
-    f.write("\n") 
+    f.write("\n")  
 
 

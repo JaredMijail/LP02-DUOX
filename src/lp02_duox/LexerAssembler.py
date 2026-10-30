@@ -74,10 +74,12 @@ class Assembler:
     #Instrucciones aritmeticas
     def t_NOP(self,t):
         r'NOP'
+        self.pcCounter += 1
         return '00'
 
     def t_ADD(self,t):
         r'ADD'
+        self.pcCounter += 1
         return '01'
 
     def t_SUB(self,t):
@@ -92,15 +94,18 @@ class Assembler:
 
     def t_DIV(self,t):
         r'DIV'
+        self.pcCounter += 1
         return '04'
 
     def t_MOD(self,t):
         r'MOD'
+        self.pcCounter += 1
         return '05'
 
     #Instrucciones logicas
     def t_AND(self,t):
         r'AND'
+        self.pcCounter += 1
         return '06'
     
     def t_OR(self,t):
@@ -129,18 +134,23 @@ class Assembler:
         r'PUSH\s[0-9]+'
         self.pcCounter += 9
         value  = t.value.split(" ")[-1]
-        return '10 00 00 00 00 00 00 00 0{}'.format(value)
+        value = self.hexHelper(int(value))
+        return '10 {}'.format(value)
+    
     
     def t_POP(self,t):
         r'POP'
+        self.pcCounter += 1
         return '11'
 
     def t_DUP(self,t):
         r'DUP'
+        self.pcCounter += 1
         return '12'
 
     def t_SWAP(self,t):
         r'SWAP'
+        self.pcCounter += 1
         return '13'
 
     def t_LOAD(self,t):
@@ -179,13 +189,13 @@ class Assembler:
         r'JMP\s[a-zA-Z]+'
         value  = t.value.split(" ")[-1]
         
+        
         return '20 00 00 00 00 00 00 00 {{{}}}'.format(value)
     
     def t_JZ(self,t):
         r'JZ\s[a-zA-Z]+'
         self.pcCounter += 18
         value  = t.value.split(" ")[-1]
-        
         return '21 00 00 00 00 00 00 00 {{{}}}'.format(value)
 
     def t_JNZ(self,t):
@@ -220,14 +230,17 @@ class Assembler:
     #Operaciones con nucleos
     def t_GET_CORE(self,t):
         r'GET_CORE'
+        self.pcCounter += 1
         return '30'
     
     def t_LOCK(self,t):
         r'LOCK'
+        self.pcCounter += 1
         return '31'
     
     def t_UNLOCK(self,t):
         r'UNLOCK'
+        self.pcCounter += 1
         return '32'
     
     def t_CORE_START(self,t):
@@ -236,27 +249,33 @@ class Assembler:
     
     def t_CORE_YIELD(self,t):
         r'CORE_YIELD'
+        self.pcCounter += 1
         return '34'
 
     #Operaciones de comunicación
     def t_IN_PORT(self,t): 
         r'IN_PORT'
+        self.pcCounter += 1
         return '40'
     
     def t_OUT_PORT(self,t):
         r'OUT_PORT'
+        self.pcCounter += 1
         return '41'
     
     def t_NET_SEND(self,t): 
         r'NET_SEND'
+        self.pcCounter += 1
         return '42'
     
     def t_NET_RECV(self,t): 
         r'NET_RECV'
+        self.pcCounter += 1
         return '43'
     
     def t_NET_STAT(self,t): 
         r'NET_STAT'
+        self.pcCounter += 1
         return '44'
     
     def t_OUT(self,t):
@@ -266,6 +285,7 @@ class Assembler:
     #Memoria
     def t_CACHE_FLUSH(self,t):
         r'CACHE_FLUSH'
+        self.pcCounter += 1 
         return '50'
 
     def t_MEM_COPY(self,t):
@@ -274,10 +294,12 @@ class Assembler:
      
     def t_SET_FLAGS(self,t):
         r'SET_FLAGS' 
+        self.pcCounter += 1
         return '52'
     
     def t_GET_FLAGS(self,t):
         r'GET_FLAGS'
+        self.pcCounter += 1
         return '53'
      
     def t_INT(self,t):
@@ -309,15 +331,25 @@ class Assembler:
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
+    def hexHelper(self, int):
+            hex_string = '0x{:02x}'.format(int).split('x')[-1] 
+            string = ["00" ,"00" ,"00", "00", "00", "00", "00", "00"]
+            hexList = [hex_string[i:i+2] for i in range(0,len(hex_string),2)][::-1]
+            i = len(hexList) -1
+            while i>=0:
+                string[-i-1] = hexList[i]
+                i -= 1
+            return " ".join(string)
+
 #Programa de prueba, calculo de 5 factorial
-file = open("Factorial5assemblerEtiquetas.txt", "r")
+file = open("Factorial.txt", "r")
 data = file.read()
 file.close()
 asm = Assembler(data)
 asm.parseFile()
 asm.showResult()
-f = open("resultLexer.txt", "x")
+f = open("resultLexer.txt", "x") 
 for i in range(len(asm.result)):
     f.write(asm.result[i])
-    f.write("\n")
+    f.write("\n") 
 
