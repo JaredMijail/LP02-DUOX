@@ -1,0 +1,273 @@
+// ============================================================
+// test_programa.dx  -  Programa de prueba del lenguaje DUOXC
+// Arquitectura destino: DUOX / DUOS (pila de 64 bits)
+// Taller #01 - Grupo F - LP02-DUOX
+//
+// Este programa ejercita TODAS las categorías léxicas del
+// analizador léxico del compilador DUOXC, incluyendo tokens
+// derivados de la ISA DUOX real (docs/ISA_CPU.md).
+// ============================================================
+
+/*
+ * Bloque de comentario multilínea.
+ * La máquina DUOX tiene 48 instrucciones nativas y FPU IEEE 754.
+ * Este programa sirve para verificar el analizador léxico.
+ */
+
+// ============================================================
+// 1. CONSTANTES Y ÁMBITO  (::, literales hex y bin)
+// ============================================================
+DUOX::PROGRAMA_BASE = 0x1000;
+DUOX::STACK_TOP     = 0xFFFF;
+DUOX::V_FADD        = 16;        // vector del FPU para suma flotante
+DUOX::MASK_SIGN     = 0b1000000000000000000000000000000000000000000000000000000000000000;
+
+// ============================================================
+// 2. DEFINICIÓN DE TIPOS DE DATOS ABSTRACTOS (struct)
+// ============================================================
+
+/* TDA: punto en el plano 2D usando flotantes IEEE 754 */
+struct Punto2D {
+    float x;
+    float y;
+};
+
+/* TDA: proceso de la máquina DUOX  */
+struct ProcesoDUOX {
+    int    pc_inicial;     // PC de entrada del proceso
+    int    id_nucleo;      // 0 o 1  (GET_CORE)
+    bool   activo;
+    string nombre;
+};
+
+// ============================================================
+// 3. FUNCIÓN RECURSIVA: factorial con int de 64 bits
+// ============================================================
+func factorial(int n) : int {
+    // Caso base
+    if n <= 1 do
+        return 1;
+    fi
+
+    // Caso recursivo: n * factorial(n-1)
+    return n * factorial(n - 1);
+}
+
+// ============================================================
+// 4. FUNCIÓN: potencia entera (usa while/do/done y break)
+// ============================================================
+func potencia(int base, int exp) : int {
+    int resultado = 1;
+    int i = 0;
+
+    while i < exp do
+        if base == 0 do
+            break;          // base cero: resultado siempre 0
+        fi
+        resultado *= base;
+        i += 1;
+    done
+
+    return resultado;
+}
+
+// ============================================================
+// 5. FUNCIÓN FLOTANTE: distancia euclidiana (FPU IEEE 754)
+// ============================================================
+func distancia(Punto2D a, Punto2D b) : float {
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    // Usa la raíz cuadrada del FPU: sqrt(dx*dx + dy*dy)
+    return (dx * dx + dy * dy) ** 0.5;
+}
+
+// ============================================================
+// 6. PROCEDIMIENTO: manejador de interrupción del teclado
+//    (ISR instalada en el vector 0 de DUOX)
+// ============================================================
+interrupt proc isr_teclado() {
+    // Cuerpo vacío: solo retorna al estado previo
+    // La ISA DUOX usa IRET para esto:
+    asm { @asm_IRET }
+}
+
+// ============================================================
+// 7. PROCEDIMIENTO: emitir un carácter (usa ensamblador inline)
+//    Equivalente a: PUSH valor; SWAP; INT 1
+// ============================================================
+proc emitir_caracter(int codigo_ascii) {
+    // Cargamos el código ASCII en la pila usando inline asm
+    asm {
+        @asm_LOAD_IMM   // TOS <- codigo_ascii (pasado por compilador)
+        @asm_SWAP       // NOS <-> TOS
+        @asm_OUT        // escribe chr(TOS & 0xFF) en la consola
+    }
+}
+
+// ============================================================
+// 8. PROGRAMA PRINCIPAL
+// ============================================================
+proc main() {
+    // --- 8.1 Literales de todos los tipos ---
+    int   a     = 42;
+    int   b     = 0b101010;         // binario: 42
+    int   c     = 0x2A;             // hexadecimal: 42
+    float pi    = 3.14159265358979; // flotante decimal
+    float eps   = 2.5e-10;          // notación científica
+    float medio = .5;               // sin parte entera
+    float uno   = 1.;               // sin parte decimal
+    char  letra = 'A';
+    char  nueva = '\n';
+    char  nulo  = '\0';
+    char  hex_c = '\x41';           // 'A' en hexadecimal
+    bool  flag  = true;
+    bool  flag2 = false;
+    string saludo = "¡Hola DUOX!\n";
+    string ruta   = "directorio\\archivo.dx";
+    string vacia  = "";
+
+    // --- 8.2 Operadores de asignación compuesta ---
+    a += 10;
+    a -= 5;
+    a *= 2;
+    a /= 3;
+    a %= 7;
+
+    // --- 8.3 Operadores aritméticos y de potencia ---
+    int suma   = a + b;
+    int prod   = a * b;
+    int coc    = a / b;
+    int resto  = a % b;
+    int pot    = 2 ** 10;           // 1024
+    int neg    = ~a;                // complemento a bits
+
+    // --- 8.4 Operadores de comparación ---
+    bool eq  = (a == b);
+    bool neq = (a != b);
+    bool lt  = (a <  b);
+    bool gt  = (a >  b);
+    bool le  = (a <= b);
+    bool ge  = (a >= b);
+
+    // --- 8.5 Operadores lógicos (símbolos y palabras) ---
+    bool r1 = flag && flag2;
+    bool r2 = flag || flag2;
+    bool r3 = !flag;
+    bool r4 = flag and flag2;
+    bool r5 = flag or  flag2;
+    bool r6 = not flag;
+
+    // --- 8.6 Operadores de bits ---
+    int ba  = a & b;     // AND bits
+    int bo  = a | b;     // OR  bits
+    int bx  = a ^ b;     // XOR bits
+    int sl  = a << 3;    // shift left
+    int sr  = a >> 2;    // shift right
+
+    // --- 8.7 Arreglos y matrices ---
+    array int  fib[10];
+    matrix float m[4][4];
+
+    fib[0] = 0;
+    fib[1] = 1;
+    int k = 2;
+
+    for k in fib do
+        fib[k] = fib[k-1] + fib[k-2];
+        if k > 8 do
+            continue;
+        fi
+    done
+
+    // --- 8.8 Acceso a structs (. y ->) ---
+    Punto2D origen;
+    origen.x = 0.0;
+    origen.y = 0.0;
+
+    Punto2D destino;
+    destino.x = 3.0;
+    destino.y = 4.0;
+
+    float d = distancia(origen, destino);   // debe ser 5.0
+
+    ProcesoDUOX proc0;
+    proc0.pc_inicial = 0x1000;
+    proc0.id_nucleo  = 0;
+    proc0.activo     = true;
+    proc0.nombre     = "proceso_principal";
+
+    // Acceso via puntero (arrow operator)
+    ProcesoDUOX* pp = &proc0;
+    pp->activo = false;
+
+    // --- 8.9 Resolución de ámbito :: ---
+    int base_addr = DUOX::PROGRAMA_BASE;
+
+    // --- 8.10 Operadores => (mapeo / case branch) ---
+    // Uso futuro en expresiones match/case del compilador:
+    //   case n => factorial(n)
+
+    // --- 8.11 E/S de alto nivel ---
+    println("Factorial de 10 = ");
+    print(factorial(10));
+    println("");
+
+    println("Potencia 2^16   = ");
+    print(potencia(2, 16));
+    println("");
+
+    println("Distancia (0,0)-(3,4) = ");
+    print(d);
+    println("");
+
+    // --- 8.12 Uso del FPU IEEE 754 mediante ensamblador inline ---
+    // Computa sqrt(2.0) usando el servicio fpu_fsqrt del DUOX
+    // (vector 18 = V_FMUL, ver macros.inc)
+    float raiz2 = 0.0;
+    asm {
+        @asm_PUSH       // empuja el valor 0 (placeholder)
+        @asm_LOAD_IMM   // TOS <- codificación IEEE 754 de 2.0
+        @asm_SWAP
+        @asm_INT        // llama al FPU (vector en TOS)
+        @asm_STORE      // MEM[dir_raiz2] <- FR (resultado)
+    }
+
+    // --- 8.13 Concurrencia: lanzar núcleo 1 ---
+    asm {
+        @asm_GET_CORE   // empuja CORE_ID (0 o 1)
+        @asm_LOCK       // adquiere el cerrojo de bus
+        @asm_CORE_START // arranca núcleo 1 en la dirección de la pila
+        @asm_UNLOCK     // libera el cerrojo
+        @asm_CORE_YIELD // cede el turno
+    }
+
+    // --- 8.14 Red / Puertos de E/S ---
+    asm {
+        @asm_IN_PORT    // lee de puerto (TOS = número de puerto)
+        @asm_OUT_PORT   // escribe en puerto
+        @asm_NET_SEND   // envía paquete por red (largo en NOS, dir en TOS)
+        @asm_NET_RECV   // recibe paquete
+        @asm_NET_STAT   // bytes pendientes en la cola de recepción
+    }
+
+    // --- 8.15 Operaciones de sistema ---
+    asm {
+        @asm_GET_FLAGS  // empuja el estado de PSW (C Z N V LOCK CORE_ID)
+        @asm_SET_FLAGS  // actualiza PSW desde TOS
+        @asm_MEM_COPY   // copia n palabras de memoria (Tipo 2)
+        @asm_CACHE_FLUSH // sin efecto (no hay caché modelada)
+        @asm_EI         // habilita interrupciones (PSW.I <- 1)
+        @asm_DI         // deshabilita interrupciones (PSW.I <- 0)
+        @asm_NOP        // no operación
+    }
+
+    // --- 8.16 Gestión dinámica de memoria ---
+    Punto2D* p = new Punto2D;
+    p->x = 1.5;
+    p->y = 2.5;
+    int tam = sizeof(Punto2D);
+    free(p);
+
+    // --- 8.17 Retorno nulo y halt ---
+    halt;
+}
